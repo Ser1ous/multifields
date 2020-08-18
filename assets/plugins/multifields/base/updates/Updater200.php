@@ -2,6 +2,8 @@
 
 namespace Multifields\Base\Updates;
 
+use EvolutionCMS\Models\SiteTmplvar;
+use EvolutionCMS\Models\SiteTmplvarContentvalue;
 use Multifields\Base\Updater;
 
 class Updater200 extends Updater
@@ -79,25 +81,19 @@ class Updater200 extends Updater
     protected function update_data_default()
     {
         $evo = evolutionCMS();
+        $result = SiteTmplvar::query()->select('site_tmplvars.*', 'site_tmplvar_contentvalues.id as tvc_id', 'site_tmplvar_contentvalues.value')
+            ->leftJoin('site_tmplvar_contentvalues', 'site_tmplvar_contentvalues.tmplvarid', '=', 'site_tmplvars.id')
+            ->where('site_tmplvars.type', 'custom_tv:multifields')
+            ->where('site_tmplvar_contentvalues.value', '<>', '');
 
-        $res = $evo->db->query('
-            SELECT
-            TV.*, TVC.id AS tvc_id, TVC.value
-            FROM ' . $evo->getFullTableName('site_tmplvars') . ' AS TV
-            LEFT JOIN ' . $evo->getFullTableName('site_tmplvar_contentvalues') . ' AS TVC ON TVC.tmplvarid = TV.id
-            WHERE 1
-            AND TV.type = "custom_tv:multifields"
-            AND TVC.value <> ""
-        ');
-
-        if ($evo->db->getRecordCount($res)) {
-            while ($row = $evo->db->getRow($res)) {
+        if ($result->count()>0) {
+            foreach ($result->get()->toArray() as $row) {
                 $row['value'] = !empty($row['value']) ? $this->fillData(json_decode($row['value'], true)) : '';
                 if (!empty($row['value'])) {
                     $row['value'] = json_encode($row['value'], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
-                    $evo->db->update([
+                    SiteTmplvarContentvalue::query()->where('id', $row['tvc_id'])->update([
                         'value' => $row['value']
-                    ], $evo->getFullTableName('site_tmplvar_contentvalues'), 'id = ' . $row['tvc_id']);
+                    ]);
                 }
             }
         }
